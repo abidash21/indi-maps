@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import LandingPage from './components/LandingPage';
 import MapCanvas from './components/MapCanvas';
 import MapTypeSelector from './components/MapTypeSelector';
 import StateEditor from './components/StateEditor';
@@ -9,6 +10,7 @@ import { exportMap } from './lib/exportUtils';
 let nextBlockId = 4;
 
 function App() {
+  const [currentView, setCurrentView] = useState('landing');
   const [mapType, setMapType] = useState('1a'); 
   const [stateValues, setStateValues] = useState({});
   const [baseNumericColor, setBaseNumericColor] = useState('#1a6b2a');
@@ -97,13 +99,28 @@ function App() {
   const STYLE_BTN = (active) => 
     `px-2 py-1 text-[10px] rounded border transition-colors ${active ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`;
 
+  if (currentView === 'landing') {
+    return <LandingPage onSelectMap={() => setCurrentView('editor')} />;
+  }
+
   return (
     <div className="flex w-full h-screen font-sans bg-gray-50 overflow-hidden text-gray-800">
       
       <aside className="w-80 bg-white border-r border-gray-200 flex flex-col pt-6 pb-0 overflow-hidden shrink-0 z-10 shadow-sm">
-        <div className="px-6 border-b border-gray-100 pb-5 shrink-0">
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Indi Maps</h1>
-          <p className="text-sm text-gray-500 mt-1">Easily map India's data.</p>
+        <div className="px-6 border-b border-gray-100 pb-5 shrink-0 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Indi Maps</h1>
+            <p className="text-sm text-gray-500 mt-1">Easily map India's data.</p>
+          </div>
+          <button 
+            onClick={() => setCurrentView('landing')}
+            className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-indigo-600 transition-colors tooltip"
+            title="Back to Selection"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
