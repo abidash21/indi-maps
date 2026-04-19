@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback, useRef } from 'react';
 import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import indiaTopoRaw from '../data/india-states.json';
@@ -9,7 +9,6 @@ const SHORT_NAMES = {
   "Tamil Nadu": "Tamil Nadu"
 };
 
-// Custom offset overrides [xOffset, yOffset]
 const LABEL_OFFSETS = {
   "Dadra and Nagar Haveli\n& Daman and Diu": [-30, 0],
   "Goa": [-25, 5],
@@ -34,13 +33,11 @@ const LABEL_OFFSETS = {
   "Meghalaya": [0, 10]
 };
 
-// Helper to wrap text into lines based on character length
 function wrapText(text, maxChars = 30) {
   if (!text) return [];
   const words = text.split(/\s+/);
   const lines = [];
   let currentLine = '';
-
   words.forEach(word => {
     if ((currentLine + word).length <= maxChars) {
       currentLine += (currentLine ? ' ' : '') + word;
@@ -52,6 +49,15 @@ function wrapText(text, maxChars = 30) {
   if (currentLine) lines.push(currentLine);
   return lines;
 }
+
+const DEFAULT_POSITIONS = {
+  title:    { x: 540, y: 70 },
+  legend:   { x: 630, y: 160 },
+  source:   { x: 40,  y: 1055 },
+  notes:    { x: 740, y: 650 },
+  map:      { x: 0,   y: 0 },
+  category: { x: 60,  y: 850 },
+};
 
 export default function MapCanvas({ 
   stateColors = {}, 
@@ -68,7 +74,14 @@ export default function MapCanvas({
   notesSize = 18,
   mapZoom = 1.0
 }) {
-  // Convert TopoJSON to GeoJSON features only once
+  const svgRef = useRef(null);
+
+  const [positions, setPositions] = useState(DEFAULT_POSITIONS);
+  // Per-state label drag offsets: { "Maharashtra": {x: 5, y: -10}, … }
+  const [labelDragOffsets, setLabelDragOffsets] = useState({});
+  // dragging can be a component key OR { type: 'label', stateName: '...' }
+  const [dragging, setDragging] = useState(null);
+
   const features = useMemo(() => {
     return topojson.feature(indiaTopoRaw, indiaTopoRaw.objects.states).features;
   }, []);
@@ -81,21 +94,16 @@ export default function MapCanvas({
     const centerY = height / 2;
     const baseWidth = 900;
     const baseHeight = 840;
-    
     const scaledWidth = baseWidth * mapZoom;
     const scaledHeight = baseHeight * mapZoom;
-    
-    // Position slightly lower to clear title area
     const x0 = centerX - scaledWidth / 2;
     const x1 = centerX + scaledWidth / 2;
     const y0 = centerY - (scaledHeight / 2) + 60;
     const y1 = centerY + (scaledHeight / 2) + 60;
-
     const projection = d3.geoMercator().fitExtent([[x0, y0], [x1, y1]], { type: "FeatureCollection", features });
     return d3.geoPath().projection(projection);
   }, [features, mapZoom]);
 
-  // Compute max for legend 1b
   const maxValue = useMemo(() => {
     if (mapType !== '1b') return 100;
     const values = Object.values(stateValues).map(v => Number(v)).filter(v => !isNaN(v));
@@ -105,30 +113,115 @@ export default function MapCanvas({
 
   const titleLines = useMemo(() => wrapText(title, 35), [title]);
 
+  const toSvgCoords = useCallback((clientX, clientY) => {
+    const svg = svgRef.current;
+    if (!svg) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+    return { x: svgP.x, y: svgP.y };
+  }, []);
+
+  const handleComponentMouseDown = useCallback((key, e) => {
+    e.stopPropagation();
+    const { x, y } = toSvgCoords(e.clientX, e.clientY);
+    setDragging({
+      type: 'component',
+      key,
+      startX: x,
+      startY: y,
+      origX: positions[key].x,
+      origY: positions[key].y,
+    });
+  }, [positions, toSvgCoords]);
+
+  const handleLabelMouseDown = useCallback((stateName, e) => {
+    e.stopPropagation();
+    const { x, y } = toSvgCoords(e.clientX, e.clientY);
+    const cur = labelDragOffsets[stateName] || { x: 0, y: 0 };
+    setDragging({
+      type: 'label',
+      stateName,
+      startX: x,
+      startY: y,
+      origX: cur.x,
+      origY: cur.y,
+    });
+  }, [labelDragOffsets, toSvgCoords]);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!dragging) return;
+    const { x, y } = toSvgCoords(e.clientX, e.clientY);
+    const dx = x - dragging.startX;
+    const dy = y - dragging.startY;
+
+    if (dragging.type === 'component') {
+      setPositions(prev => ({
+        ...prev,
+        [dragging.key]: {
+          x: dragging.origX + dx,
+          y: dragging.origY + dy,
+        }
+      }));
+    } else if (dragging.type === 'label') {
+      setLabelDragOffsets(prev => ({
+        ...prev,
+        [dragging.stateName]: {
+          x: dragging.origX + dx,
+          y: dragging.origY + dy,
+        }
+      }));
+    }
+  }, [dragging, toSvgCoords]);
+
+  const handleMouseUp = useCallback(() => {
+    setDragging(null);
+  }, []);
+
+  const DragHandle = ({ x, y }) => (
+    <circle cx={x} cy={y} r="8" fill="rgba(99,102,241,0.3)" stroke="rgba(99,102,241,0.7)" strokeWidth="1.5" className="drag-handle" />
+  );
+
   return (
     <div id="india-map-container" className="w-full h-full flex justify-center items-center overflow-hidden bg-white relative">
       <svg
+        ref={svgRef}
         width="100%"
         height="100%"
         viewBox={`0 0 ${width} ${height}`}
         className="max-h-full max-w-full"
         xmlns="http://www.w3.org/2000/svg"
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
       >
         <defs>
           <linearGradient id="dynamic-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#ffffff" />
             <stop offset="100%" stopColor={baseNumericColor} />
           </linearGradient>
+          <style>{`
+            .draggable { cursor: grab; }
+            .draggable:active { cursor: grabbing; }
+            .drag-handle { opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+            .draggable:hover .drag-handle { opacity: 1; }
+          `}</style>
         </defs>
 
         <rect width={width} height={height} fill="white" />
 
-        <g className="india-map">
+        {/* ===== DRAGGABLE: Map (paths + labels move together) ===== */}
+        <g 
+          className="draggable"
+          transform={`translate(${positions.map.x}, ${positions.map.y})`}
+          onMouseDown={(e) => handleComponentMouseDown('map', e)}
+        >
+          {/* State paths */}
           {features.map((feature) => {
             const stateInfo = STATES.find((s) => s.id === feature.id);
             const stateName = stateInfo ? stateInfo.name : "Unknown";
             const color = stateColors[stateName] || "#e8e8e8";
-
             return (
               <path
                 key={feature.id || Math.random()}
@@ -142,71 +235,67 @@ export default function MapCanvas({
               </path>
             );
           })}
-        </g>
-        
-        {/* Render Labels After Paths for layering */}
-        <g className="map-labels pointer-events-none">
+
+          {/* State labels — each individually draggable within the map group */}
           {features.map((feature) => {
             const stateInfo = STATES.find((s) => s.id === feature.id);
             if (!stateInfo) return null;
-
             const fullName = stateInfo.name;
             const displayName = SHORT_NAMES[fullName] || fullName;
             const value = stateValues[fullName] !== undefined && stateValues[fullName] !== '' ? stateValues[fullName] : '0';
-
-            // Get centroid of the geometry
             let centroid = [0, 0];
             try {
               centroid = pathGenerator.centroid(feature);
               if (isNaN(centroid[0]) || isNaN(centroid[1])) return null;
-            } catch (e) {
-              return null;
-            }
+            } catch (e) { return null; }
 
-            const offset = LABEL_OFFSETS[displayName] || [0, 0];
-            const x = centroid[0] + offset[0] * mapZoom;
-            const y = centroid[1] + offset[1] * mapZoom;
-
+            const preset = LABEL_OFFSETS[displayName] || [0, 0];
+            const userDrag = labelDragOffsets[fullName] || { x: 0, y: 0 };
+            const x = centroid[0] + preset[0] * mapZoom + userDrag.x;
+            const y = centroid[1] + preset[1] * mapZoom + userDrag.y;
             const showValue = mapType !== '3';
-
             const fontSizeBase = 14 * mapZoom;
             const fontSizeValue = 18 * mapZoom;
             const fontSizeSmall = 8 * mapZoom;
 
             return (
-              <text
+              <g
                 key={`label-${feature.id}`}
-                x={x}
-                y={y}
-                textAnchor="middle"
-                className="select-none font-sans"
-                style={{ fill: '#ffffff', paintOrder: 'stroke', stroke: '#000000', strokeWidth: 2 * mapZoom, filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.5))' }}
+                className="draggable"
+                onMouseDown={(e) => handleLabelMouseDown(fullName, e)}
+                style={{ cursor: 'grab' }}
               >
-                {displayName.split('\n').map((line, i) => {
-                  const isSmall = displayName.includes("Dadra and Nagar Haveli");
-                  return (
-                    <tspan 
-                      key={i} 
-                      x={x} 
-                      dy={i === 0 ? "-0.2em" : "1.1em"} 
-                      fontSize={isSmall ? fontSizeSmall : fontSizeBase}
-                    >
-                      {line}
-                    </tspan>
-                  );
-                })}
-                {showValue && (
-                  <tspan x={x} dy="1.1em" fontSize={fontSizeValue} fontWeight="bold">
-                    {value}
-                  </tspan>
-                )}
-              </text>
+                <text
+                  x={x} y={y}
+                  textAnchor="middle"
+                  className="select-none font-sans"
+                  style={{ fill: '#ffffff', paintOrder: 'stroke', stroke: '#000000', strokeWidth: 2 * mapZoom, filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.5))' }}
+                >
+                  {displayName.split('\n').map((line, i) => {
+                    const isSmall = displayName.includes("Dadra and Nagar Haveli");
+                    return (
+                      <tspan key={i} x={x} dy={i === 0 ? "-0.2em" : "1.1em"} fontSize={isSmall ? fontSizeSmall : fontSizeBase}>
+                        {line}
+                      </tspan>
+                    );
+                  })}
+                  {showValue && (
+                    <tspan x={x} dy="1.1em" fontSize={fontSizeValue} fontWeight="bold">{value}</tspan>
+                  )}
+                </text>
+              </g>
             );
           })}
         </g>
 
-        {/* Title and Subtitle - Wrapped Title */}
-        <g transform={`translate(${width / 2}, 70)`} textAnchor="middle">
+        {/* ===== DRAGGABLE: Title + Subtitle ===== */}
+        <g 
+          className="draggable"
+          transform={`translate(${positions.title.x}, ${positions.title.y})`}
+          onMouseDown={(e) => handleComponentMouseDown('title', e)}
+          textAnchor="middle"
+        >
+          <DragHandle x={0} y={-10} />
           {titleLines.map((line, i) => (
             <text key={i} y={i * (titleSize * 1.05)} fontSize={titleSize} fontWeight="bold" fill="#111827" className="font-sans">
               {line}
@@ -219,19 +308,31 @@ export default function MapCanvas({
           )}
         </g>
 
-        {/* Dedicated Source */}
-        <text x={40} y={height - 25} fontSize="16" fill="#6b7280" className="font-sans font-medium">
-          {source}
-        </text>
+        {/* ===== DRAGGABLE: Source ===== */}
+        <g
+          className="draggable"
+          transform={`translate(${positions.source.x}, ${positions.source.y})`}
+          onMouseDown={(e) => handleComponentMouseDown('source', e)}
+        >
+          <DragHandle x={0} y={-5} />
+          <text fontSize="16" fill="#6b7280" className="font-sans font-medium">
+            {source}
+          </text>
+        </g>
 
-        {/* Numeric Legend - With Legend Title above */}
+        {/* ===== DRAGGABLE: Numeric Legend ===== */}
         {(mapType === '1a' || mapType === '1b') && (
-          <g transform={`translate(${width - 450}, 160)`}>
-             {legendTitle && (
-               <text x={175} y="-15" textAnchor="middle" fontSize="16" fontWeight="bold" fill="#374151" className="font-sans">
-                 {legendTitle}
-               </text>
-             )}
+          <g 
+            className="draggable"
+            transform={`translate(${positions.legend.x}, ${positions.legend.y})`}
+            onMouseDown={(e) => handleComponentMouseDown('legend', e)}
+          >
+            <DragHandle x={0} y={-15} />
+            {legendTitle && (
+              <text x={175} y="-15" textAnchor="middle" fontSize="16" fontWeight="bold" fill="#374151" className="font-sans">
+                {legendTitle}
+              </text>
+            )}
             <rect width="350" height="15" fill="url(#dynamic-gradient)" rx="4" stroke="#e5e7eb" />
             <text y="35" fontSize="14" fill="#374151" className="font-sans">0</text>
             <text x="350" y="35" textAnchor="end" fontSize="14" fill="#374151" className="font-sans">
@@ -240,9 +341,14 @@ export default function MapCanvas({
           </g>
         )}
 
-        {/* Category Legend */}
+        {/* ===== DRAGGABLE: Category Legend ===== */}
         {mapType === '3' && categories && categories.length > 0 && (
-          <g className="map-legend" transform="translate(60, 850)">
+          <g 
+            className="draggable"
+            transform={`translate(${positions.category.x}, ${positions.category.y})`}
+            onMouseDown={(e) => handleComponentMouseDown('category', e)}
+          >
+            <DragHandle x={0} y={-5} />
             {categories.map((cat, idx) => (
               <g key={cat.id} transform={`translate(0, ${idx * 30})`}>
                 <rect x="0" y="0" width="18" height="18" rx="4" fill={cat.color || "#cccccc"} />
@@ -254,16 +360,17 @@ export default function MapCanvas({
           </g>
         )}
 
-        {/* Notes Section - level of Odisha, Point Wrapping */}
+        {/* ===== DRAGGABLE: Notes ===== */}
         {notes && notes.length > 0 && (
-          <g className="map-notes" transform="translate(740, 650)">
-            <text fontSize={notesSize + 2} fontWeight="bold" fill="#111827" className="font-sans mb-2">Notes:</text>
+          <g 
+            className="draggable"
+            transform={`translate(${positions.notes.x}, ${positions.notes.y})`}
+            onMouseDown={(e) => handleComponentMouseDown('notes', e)}
+          >
+            <DragHandle x={0} y={-5} />
+            <text fontSize={notesSize + 2} fontWeight="bold" fill="#111827" className="font-sans">Notes:</text>
             {notes.map((note, idx) => {
               const wrappedNote = wrapText(note, 25);
-              let cumulativeY = 0;
-              // We need to calculate cumulative Y based on current index and previous wrapped lines
-              // For simplicity, let's just render the wrapped lines for each point
-              // Actually, I'll calculate total offset based on overall index
               return (
                 <g key={idx} transform={`translate(0, ${30 + idx * 50})`}>
                   <text fontSize={notesSize} fill="#374151" className="font-sans">
