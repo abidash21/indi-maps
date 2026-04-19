@@ -1,6 +1,9 @@
 import indiaTopo from './india-states.json';
 import westBengalTopo from './west-bengal.json';
 import odishaTopo from './odisha.json';
+import assamTopo from './assam.json';
+import keralaTopo from './kerala.json';
+import tamilnaduTopo from './tamilnadu.json';
 
 export const MAP_CONFIGS = {
   'india': {
@@ -73,19 +76,24 @@ export const MAP_CONFIGS = {
       "Meghalaya": [0, 10]
     }
   },
+
   'west-bengal': {
     name: 'West Bengal Districts',
     topoData: westBengalTopo,
     featureKey: 'WestBengal',
     propertyKey: 'Dist_Name',
     regionsList: [
-      "Alipurduar","Bankura","Barddhaman","Birbhum","Dakshin Dinajpur","Darjiling","Haora","Hugli","Jalpaiguri","Koch Bihar","Kolkata","Maldah","Murshidabad","Nadia","North Twenty Four Parganas","Paschim Medinipur","Purba Medinipur","Puruliya","South Twenty Four Parganas","Uttar Dinajpur"
+      "Alipurduar","Bankura","Barddhaman","Birbhum","Dakshin Dinajpur","Darjiling",
+      "Haora","Hugli","Jalpaiguri","Koch Bihar","Kolkata","Maldah","Murshidabad",
+      "Nadia","North Twenty Four Parganas","Paschim Medinipur","Purba Medinipur",
+      "Puruliya","South Twenty Four Parganas","Uttar Dinajpur"
     ].map(d => ({ id: d, name: d })),
     shortNames: {},
     labelOffsets: {
       "Kolkata": [20, 0],
     }
   },
+
   'odisha': {
     name: 'Odisha Districts',
     topoData: odishaTopo,
@@ -110,6 +118,85 @@ export const MAP_CONFIGS = {
       "Baleshwar": [20, -10],
       "Jharsuguda": [-5, -10],
       "Debagarh": [0, -10],
+    }
+  },
+
+  'assam': {
+    name: 'Assam Districts',
+    topoData: assamTopo,
+    featureKey: 'Assam',
+    propertyKey: 'Dist_Name',
+    regionsList: [
+      "Barpeta","Chirang","Cachar","Udalguri","Dhemaji","Dhuburi","Dibrugarh",
+      "Goalpara","Golaghat","Hailakandi","Jorhat","Kamrup","Karimganj","Lakhimpur",
+      "Morigaon","Nagaon","Dima Hasao","Sivasagar","Sonitpur","Tinsukia",
+      "Nalbari","Baksa","Kamrup Metropolitan","Darrang","Bongaigaon","Karbi Anglong","Kokrajhar"
+    ].map(d => ({ id: d, name: d })),
+    shortNames: {
+      "Kamrup Metropolitan": "Kamrup\nMetro",
+      "Dima Hasao": "Dima\nHasao",
+      "Karbi Anglong": "Karbi\nAnglong",
+    },
+    labelOffsets: {
+      "Kamrup Metropolitan": [30, 0],
+      "Bongaigaon": [-10, 10],
+      "Chirang": [10, 15],
+      "Baksa": [10, 10],
+    }
+  },
+
+  'kerala': {
+    name: 'Kerala Districts',
+    topoData: keralaTopo,
+    featureKey: 'Kerala',
+    propertyKey: 'Dist_Name',
+    regionsList: [
+      "Alappuzha","Ernakulam","Idukki","Kannur","Kasaragod","Kollam",
+      "Kottayam","Kozhikode","Malappuram","Palakkad","Pathanamthitta",
+      "Thiruvananthapuram","Thrissur","Wayanad"
+    ].map(d => ({ id: d, name: d })),
+    shortNames: {
+      "Thiruvananthapuram": "Thiruvan-\nanthapuram",
+      "Pathanamthitta": "Pathanam-\nthitta",
+    },
+    labelOffsets: {
+      "Thiruvananthapuram": [-30, 0],
+      "Pathanamthitta": [-35, 0],
+      "Alappuzha": [-30, 5],
+      "Kasaragod": [-20, -5],
+      "Ernakulam": [-25, 0],
+    }
+  },
+
+  'tamil-nadu': {
+    name: 'Tamil Nadu Districts',
+    topoData: tamilnaduTopo,
+    featureKey: 'TamilNadu',
+    propertyKey: 'Dist_Name',
+    regionsList: [
+      "Ariyalur","Chennai","Coimbatore","Cuddalore","Dharmapuri","Dindigul",
+      "Erode","Kancheepuram","Kanniyakumari","Karur","Krishnagiri","Madurai",
+      "Nagapattinam","Namakkal","The Nilgiris","Perambalur","Pudukkottai",
+      "Ramanathapuram","Salem","Sivaganga","Thanjavur","Theni","Thiruvallur",
+      "Thiruvarur","Thoothukudi","Tiruchchirappalli","Tirunelveli","Tiruppur",
+      "Tiruvannamalai","Vellore","Villupuram","Virudhunagar"
+    ].map(d => ({ id: d, name: d })),
+    shortNames: {
+      "Kanniyakumari": "Kanya-\nkumari",
+      "Ramanathapuram": "Ramana-\nthapuram",
+      "Tiruchchirappalli": "Trichy",
+      "The Nilgiris": "Nilgiris",
+    },
+    labelOffsets: {
+      "Chennai": [25, 0],
+      "Kanniyakumari": [0, 15],
+      "Ramanathapuram": [30, 5],
+      "Thoothukudi": [30, 0],
+      "Tirunelveli": [-25, 5],
+      "Nagapattinam": [30, 5],
+      "Thiruvarur": [30, 0],
+      "Kancheepuram": [-30, 5],
+      "Thiruvallur": [-20, -5],
     }
   }
 };
