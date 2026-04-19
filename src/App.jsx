@@ -3,7 +3,8 @@ import MapCanvas from './components/MapCanvas';
 import MapTypeSelector from './components/MapTypeSelector';
 import StateEditor from './components/StateEditor';
 import { STATES } from './data/states';
-import { percentageColor, absoluteColor, binaryColor, multiColor } from './lib/colorScales';
+import { percentageColor, absoluteColor, multiColor } from './lib/colorScales';
+import { exportMap } from './lib/exportUtils';
 
 function App() {
   const [mapType, setMapType] = useState('1a'); 
@@ -34,7 +35,6 @@ function App() {
   const handleStateValueChange = (stateName, value) => {
     setStateValues(prev => ({ ...prev, [stateName]: value }));
   };
-
 
   const handleNotesChange = (idx, value) => {
     const next = [...notes];
@@ -220,6 +220,24 @@ function App() {
             mapType={mapType} 
             onChange={handleMapTypeChange} 
           />
+
+          <div className="space-y-4 pt-4">
+            <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Export Map</h2>
+            <div className="grid grid-cols-2 gap-3 pb-8">
+              <button
+                onClick={() => exportMap('india-map-container', title.replace(/\s+/g, '-').toLowerCase() || 'india-map', 'png')}
+                className="flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 px-4 rounded-lg transition-all shadow-sm"
+              >
+                <span>PNG (1080px)</span>
+              </button>
+              <button
+                onClick={() => exportMap('india-map-container', title.replace(/\s+/g, '-').toLowerCase() || 'india-map', 'svg')}
+                className="flex items-center justify-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold py-3 px-4 rounded-lg border border-gray-200 transition-all shadow-sm"
+              >
+                <span>SVG Vector</span>
+              </button>
+            </div>
+          </div>
 
           <StateEditor 
             mapType={mapType}
