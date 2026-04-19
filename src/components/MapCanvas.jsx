@@ -1,40 +1,15 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
-import indiaTopoRaw from '../data/india-states.json';
-import { STATES } from '../data/states';
 import logoSrc from '../assets/statvyam.png';
 
-const SHORT_NAMES = {
-  "Dadra and Nagar Haveli and Daman and Diu": "Dadra and Nagar Haveli\n& Daman and Diu",
-  "Tamil Nadu": "Tamil Nadu"
-};
-
-const LABEL_OFFSETS = {
-  "Dadra and Nagar Haveli\n& Daman and Diu": [-30, 0],
-  "Goa": [-25, 5],
-  "Kerala": [-25, 5],
-  "Lakshadweep": [-35, 0],
-  "Puducherry": [45, 10],
-  "Sikkim": [0, -15],
-  "Tripura": [0, 25],
-  "Mizoram": [35, 15],
-  "Manipur": [35, 5],
-  "Nagaland": [35, 0],
-  "Arunachal Pradesh": [0, -15],
-  "Andaman and Nicobar Islands": [-35, 0],
-  "Chandigarh": [20, -10],
-  "Delhi": [20, 0],
-  "Punjab": [-15, 10],
-  "Himachal Pradesh": [0, -15],
-  "Karnataka": [-30, 10],
-  "Jharkhand": [-15, 15],
-  "Uttarakhand": [10, 0],
-  "Andhra Pradesh": [-40, 40],
-  "Meghalaya": [0, 10]
-};
-
 export default function MapCanvas({ 
+  topoData,
+  featureKey,
+  propertyKey,
+  regionsList = [],
+  shortNames = {},
+  labelOffsets = {},
   stateColors = {}, 
   stateValues = {}, 
   mapType, 
@@ -66,8 +41,9 @@ export default function MapCanvas({
   }, []);
 
   const features = useMemo(() => {
-    return topojson.feature(indiaTopoRaw, indiaTopoRaw.objects.states).features;
-  }, []);
+    if (!topoData || !featureKey) return [];
+    return topojson.feature(topoData, topoData.objects[featureKey]).features;
+  }, [topoData, featureKey]);
 
   const width = 1080;
   const height = 1080;
@@ -168,29 +144,27 @@ export default function MapCanvas({
         >
           {/* State paths */}
           {features.map((feature) => {
-            const stateInfo = STATES.find((s) => s.id === feature.id);
-            const stateName = stateInfo ? stateInfo.name : "Unknown";
-            const color = stateColors[stateName] || "#e8e8e8";
+            const regionName = feature.properties[propertyKey];
+            const color = stateColors[regionName] || "#e8e8e8";
             return (
               <path
-                key={feature.id || Math.random()}
+                key={regionName || Math.random()}
                 d={pathGenerator(feature)}
                 fill={color}
                 stroke="#ffffff"
                 strokeWidth={1}
                 className="transition-colors duration-300 ease-in-out"
               >
-                <title>{stateName}</title>
+                <title>{regionName}</title>
               </path>
             );
           })}
 
           {/* State labels — each individually draggable */}
           {features.map((feature) => {
-            const stateInfo = STATES.find((s) => s.id === feature.id);
-            if (!stateInfo) return null;
-            const fullName = stateInfo.name;
-            const displayName = SHORT_NAMES[fullName] || fullName;
+            const fullName = feature.properties[propertyKey];
+            if (!fullName) return null;
+            const displayName = shortNames[fullName] || fullName;
             const value = stateValues[fullName] !== undefined && stateValues[fullName] !== '' ? stateValues[fullName] : '0';
             let centroid = [0, 0];
             try {
@@ -198,7 +172,7 @@ export default function MapCanvas({
               if (isNaN(centroid[0]) || isNaN(centroid[1])) return null;
             } catch (e) { return null; }
 
-            const preset = LABEL_OFFSETS[displayName] || [0, 0];
+            const preset = labelOffsets[displayName] || [0, 0];
             const userDrag = labelDragOffsets[fullName] || { x: 0, y: 0 };
             const x = centroid[0] + preset[0] * mapZoom + userDrag.x;
             const y = centroid[1] + preset[1] * mapZoom + userDrag.y;
@@ -209,7 +183,7 @@ export default function MapCanvas({
 
             return (
               <g
-                key={`label-${feature.id}`}
+                key={`label-${fullName}`}
                 className="draggable"
                 onMouseDown={(e) => startDrag('label', fullName, userDrag, e)}
               >

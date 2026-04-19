@@ -1,5 +1,3 @@
-import { STATES } from '../data/states';
-
 export default function StateEditor({
   mapType,
   stateValues,
@@ -8,6 +6,7 @@ export default function StateEditor({
   onType2Change,
   type3Categories,
   onType3Change,
+  regionsList = [],
 }) {
   return (
     <div className="flex flex-col space-y-6">
@@ -54,24 +53,24 @@ export default function StateEditor({
         </div>
       )}
 
-      {/* State List */}
+      {/* Regions List */}
       <div className="space-y-3">
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider sticky top-0 bg-white py-2 z-10 border-b border-gray-100">
-          State Values
+          Values
         </h3>
-        {STATES.map(state => {
-          const val = stateValues[state.name] || '';
+        {regionsList.map(region => {
+          const val = stateValues[region.name] || '';
           
           return (
-            <div key={state.id} className="flex flex-col space-y-1 pb-2 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 p-1 -mx-1 px-1 rounded transition-colors text-sm">
-              <span className="text-gray-700 select-none text-xs">{state.name}</span>
+            <div key={region.id} className="flex flex-col space-y-1 pb-2 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 p-1 -mx-1 px-1 rounded transition-colors text-sm">
+              <span className="text-gray-700 select-none text-xs">{region.name}</span>
               
               {(mapType === '1a' || mapType === '1b') && (
                 <input
                   type="number"
                   placeholder={mapType === '1a' ? "0-100" : "Value"}
                   value={val}
-                  onChange={(e) => onStateValueChange(state.name, e.target.value)}
+                  onChange={(e) => onStateValueChange(region.name, e.target.value)}
                   className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 bg-white"
                 />
               )}
@@ -80,7 +79,7 @@ export default function StateEditor({
               {mapType === '3' && (
                 <select
                   value={val}
-                  onChange={(e) => onStateValueChange(state.name, e.target.value)}
+                  onChange={(e) => onStateValueChange(region.name, e.target.value)}
                   className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 bg-white"
                 >
                   <option value="">-- None --</option>

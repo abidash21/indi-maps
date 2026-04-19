@@ -1,8 +1,9 @@
 import React from 'react';
 
 const MAP_OPTIONS = [
-  { id: 'india-political', name: 'India Political', description: 'Complete map of India with states and union territories.', active: true },
-  { id: 'west-bengal', name: 'West Bengal', description: 'District-wise map of West Bengal.', active: false },
+  { id: 'india', name: 'India Political', description: 'Complete map of India with states and union territories.', active: true },
+  { id: 'west-bengal', name: 'West Bengal', description: 'District-wise map of West Bengal.', active: true },
+  { id: 'odisha', name: 'Odisha', description: 'District-wise map of Odisha.', active: true },
   { id: 'assam', name: 'Assam', description: 'District-wise map of Assam.', active: false },
   { id: 'tamil-nadu', name: 'Tamil Nadu', description: 'District-wise map of Tamil Nadu.', active: false },
   { id: 'kerala', name: 'Kerala', description: 'District-wise map of Kerala.', active: false },
