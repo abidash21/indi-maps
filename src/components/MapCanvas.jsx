@@ -216,8 +216,8 @@ export default function MapCanvas({
                 <text
                   x={x} y={y}
                   textAnchor="middle"
-                  className="select-none font-sans"
-                  style={{ fill: '#ffffff', paintOrder: 'stroke', stroke: '#000000', strokeWidth: 2 * mapZoom, filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.5))' }}
+                  className="select-none"
+                  style={{ fill: '#ffffff', filter: 'drop-shadow(0px 2px 2px rgba(0,0,0,0.8))' }}
                 >
                   {displayName.split('\n').map((line, i) => {
                     const isSmall = displayName.includes("Dadra and Nagar Haveli");
@@ -298,17 +298,17 @@ export default function MapCanvas({
         })}
 
         {/* ===== Branding: bottom-right corner ===== */}
-        <g transform={`translate(${width - 120}, ${height - 65})`} textAnchor="middle">
-          <text x="0" y="0" fontSize="10" fill="#9ca3af" className="font-sans" letterSpacing="1">
+        <g transform={`translate(${width - 150}, ${height - 90})`} textAnchor="middle">
+          <text x="0" y="0" fontSize="14" fill="#9ca3af" letterSpacing="1">
             created by
           </text>
           {logoBase64 && (
             <image
               href={logoBase64}
-              x="-80"
+              x="-110"
               y="-10"
-              width="160"
-              height="60"
+              width="220"
+              height="85"
               preserveAspectRatio="xMidYMid meet"
             />
           )}
