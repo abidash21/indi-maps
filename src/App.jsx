@@ -6,44 +6,36 @@ import { STATES } from './data/states';
 import { percentageColor, absoluteColor, multiColor } from './lib/colorScales';
 import { exportMap } from './lib/exportUtils';
 
+let nextBlockId = 4;
+
 function App() {
   const [mapType, setMapType] = useState('1a'); 
   const [stateValues, setStateValues] = useState({});
-  const [title, setTitle] = useState('Title of the Map');
-  const [titleSize, setTitleSize] = useState(48);
-  const [subtitle, setSubtitle] = useState('');
-  const [legendTitle, setLegendTitle] = useState('Indicator Name');
-  const [baseNumericColor, setBaseNumericColor] = useState('#1a6b2a'); // Green default
-  const [source, setSource] = useState('Source: Your Reference');
-  const [notes, setNotes] = useState(['Point 1', 'Point 2']);
-  const [notesSize, setNotesSize] = useState(18);
+  const [baseNumericColor, setBaseNumericColor] = useState('#1a6b2a');
   const [mapZoom, setMapZoom] = useState(1.0);
 
-  // Type 3 configuration (default 3 categories)
   const [type3Categories, setType3Categories] = useState([
     { id: '1', name: 'High', color: '#10b981' },
     { id: '2', name: 'Medium', color: '#f59e0b' },
     { id: '3', name: 'Low', color: '#ef4444' }
   ]);
 
+  // Generic text blocks
+  const [textBlocks, setTextBlocks] = useState([
+    { id: 1, text: 'Title of the Map', fontSize: 48, fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', color: '#111827', position: { x: 540, y: 70 } },
+    { id: 2, text: 'Source: Your Reference', fontSize: 16, fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', color: '#6b7280', position: { x: 40, y: 1055 } },
+    { id: 3, text: '• Point 1\n• Point 2', fontSize: 18, fontWeight: 'normal', fontStyle: 'normal', textDecoration: 'none', color: '#374151', position: { x: 740, y: 650 } },
+  ]);
+
   // Handlers
   const handleMapTypeChange = (newType) => {
     setMapType(newType);
-    setStateValues({}); // Clear values when map type completely changes
+    setStateValues({});
   };
 
   const handleStateValueChange = (stateName, value) => {
     setStateValues(prev => ({ ...prev, [stateName]: value }));
   };
-
-  const handleNotesChange = (idx, value) => {
-    const next = [...notes];
-    next[idx] = value;
-    setNotes(next);
-  };
-
-  const addNote = () => setNotes([...notes, '']);
-  const removeNote = (idx) => setNotes(notes.filter((_, i) => i !== idx));
 
   const handleType3Change = (action, idx, field, value) => {
     if (action === 'ADD') {
@@ -59,34 +51,55 @@ function App() {
     }
   };
 
-  // Compute colors mapping for MapCanvas
+  // Text block handlers
+  const addTextBlock = () => {
+    setTextBlocks(prev => [...prev, {
+      id: nextBlockId++,
+      text: 'New Text',
+      fontSize: 20,
+      fontWeight: 'normal',
+      fontStyle: 'normal',
+      textDecoration: 'none',
+      color: '#111827',
+      position: { x: 540, y: 540 }
+    }]);
+  };
+
+  const removeTextBlock = (id) => {
+    setTextBlocks(prev => prev.filter(b => b.id !== id));
+  };
+
+  const updateTextBlock = (id, field, value) => {
+    setTextBlocks(prev => prev.map(b => b.id === id ? { ...b, [field]: value } : b));
+  };
+
+  const updateTextBlockPosition = (id, pos) => {
+    setTextBlocks(prev => prev.map(b => b.id === id ? { ...b, position: pos } : b));
+  };
+
+  // Color computation
   const computedStateColors = useMemo(() => {
     const colors = {};
     const allValues = Object.values(stateValues);
-
     STATES.forEach(state => {
       const val = stateValues[state.name];
       if (val === undefined || val === '') {
         colors[state.name] = "#f0f0f0";
         return;
       }
-
-      if (mapType === '1a') {
-        colors[state.name] = percentageColor(val, baseNumericColor);
-      } else if (mapType === '1b') {
-        colors[state.name] = absoluteColor(val, allValues, baseNumericColor);
-      } else if (mapType === '3') {
-        colors[state.name] = multiColor(val, type3Categories);
-      }
+      if (mapType === '1a') colors[state.name] = percentageColor(val, baseNumericColor);
+      else if (mapType === '1b') colors[state.name] = absoluteColor(val, allValues, baseNumericColor);
+      else if (mapType === '3') colors[state.name] = multiColor(val, type3Categories);
     });
-
     return colors;
   }, [mapType, stateValues, type3Categories, baseNumericColor]);
+
+  const STYLE_BTN = (active) => 
+    `px-2 py-1 text-[10px] rounded border transition-colors ${active ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`;
 
   return (
     <div className="flex w-full h-screen font-sans bg-gray-50 overflow-hidden text-gray-800">
       
-      {/* Sidebar Editor Area */}
       <aside className="w-80 bg-white border-r border-gray-200 flex flex-col pt-6 pb-0 overflow-hidden shrink-0 z-10 shadow-sm">
         <div className="px-6 border-b border-gray-100 pb-5 shrink-0">
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Indi Maps</h1>
@@ -94,112 +107,81 @@ function App() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+
+          {/* Text Blocks */}
           <div className="space-y-4 pb-6 border-b border-gray-200">
-            <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Map Details</h2>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Main Title</label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500"
-                  placeholder="Map Title"
-                />
-                <div className="mt-2 flex items-center space-x-2">
-                  <span className="text-[10px] text-gray-400">Size</span>
-                  <input 
-                    type="range" min="20" max="100" 
-                    value={titleSize} 
-                    onChange={(e) => setTitleSize(Number(e.target.value))}
-                    className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+            <div className="flex justify-between items-center">
+              <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Text Blocks</h2>
+              <button onClick={addTextBlock} className="text-indigo-600 text-xs font-bold hover:text-indigo-800">+ ADD</button>
+            </div>
+
+            <div className="space-y-4">
+              {textBlocks.map((block) => (
+                <div key={block.id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 space-y-2">
+                  <div className="flex justify-between items-start">
+                    <span className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Block {block.id}</span>
+                    <button onClick={() => removeTextBlock(block.id)} className="text-gray-300 hover:text-red-400 text-sm leading-none">×</button>
+                  </div>
+
+                  {/* Text input (multiline) */}
+                  <textarea
+                    value={block.text}
+                    onChange={(e) => updateTextBlock(block.id, 'text', e.target.value)}
+                    rows={2}
+                    className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 resize-y font-mono"
+                    placeholder="Enter text…"
                   />
-                  <span className="text-[10px] text-gray-400">{titleSize}px</span>
-                </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Subtitle</label>
-                <input
-                  type="text"
-                  value={subtitle}
-                  onChange={(e) => setSubtitle(e.target.value)}
-                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500"
-                  placeholder="Subtitle"
-                />
-              </div>
-
-              {(mapType === '1a' || mapType === '1b') && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Legend Title</label>
+                  {/* Size + Color row */}
+                  <div className="flex items-center space-x-2">
                     <input
-                      type="text"
-                      value={legendTitle}
-                      onChange={(e) => setLegendTitle(e.target.value)}
-                      className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500"
-                      placeholder="e.g. Population"
+                      type="color"
+                      value={block.color}
+                      onChange={(e) => updateTextBlock(block.id, 'color', e.target.value)}
+                      className="w-6 h-6 rounded cursor-pointer border-0 p-0 shrink-0"
                     />
+                    <input
+                      type="range" min="8" max="100"
+                      value={block.fontSize}
+                      onChange={(e) => updateTextBlock(block.id, 'fontSize', Number(e.target.value))}
+                      className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                    <span className="text-[9px] text-gray-400 w-8 text-right shrink-0">{block.fontSize}px</span>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Base Color (Range)</label>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="color"
-                        value={baseNumericColor}
-                        onChange={(e) => setBaseNumericColor(e.target.value)}
-                        className="w-8 h-8 rounded cursor-pointer border-0 p-0"
-                      />
-                      <span className="text-xs text-gray-400 capitalize">{baseNumericColor}</span>
-                    </div>
+
+                  {/* Style buttons */}
+                  <div className="flex flex-wrap gap-1">
+                    <button
+                      onClick={() => updateTextBlock(block.id, 'fontWeight', block.fontWeight === 'bold' ? 'normal' : 'bold')}
+                      className={STYLE_BTN(block.fontWeight === 'bold')}
+                    ><strong>B</strong></button>
+
+                    <button
+                      onClick={() => updateTextBlock(block.id, 'fontWeight', block.fontWeight === '600' ? 'normal' : '600')}
+                      className={STYLE_BTN(block.fontWeight === '600')}
+                    >SB</button>
+
+                    <button
+                      onClick={() => updateTextBlock(block.id, 'fontStyle', block.fontStyle === 'italic' ? 'normal' : 'italic')}
+                      className={STYLE_BTN(block.fontStyle === 'italic')}
+                    ><em>I</em></button>
+
+                    <button
+                      onClick={() => updateTextBlock(block.id, 'textDecoration', block.textDecoration === 'underline' ? 'none' : 'underline')}
+                      className={STYLE_BTN(block.textDecoration === 'underline')}
+                    ><u>U</u></button>
+
+                    <button
+                      onClick={() => updateTextBlock(block.id, 'textDecoration', block.textDecoration === 'line-through' ? 'none' : 'line-through')}
+                      className={STYLE_BTN(block.textDecoration === 'line-through')}
+                    ><s>S</s></button>
                   </div>
                 </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Dedicated Source</label>
-                <input
-                  type="text"
-                  value={source}
-                  onChange={(e) => setSource(e.target.value)}
-                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-1 focus:ring-indigo-500"
-                  placeholder="Source: Reference"
-                />
-              </div>
-
-              <div className="pt-2 border-t border-gray-50">
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-xs font-medium text-gray-500">Points / Notes</label>
-                  <button onClick={addNote} className="text-indigo-600 text-[10px] font-bold">+ ADD POINT</button>
-                </div>
-                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                  {notes.map((note, idx) => (
-                    <div key={idx} className="flex items-center space-x-1">
-                      <input
-                        type="text"
-                        value={note}
-                        onChange={(e) => handleNotesChange(idx, e.target.value)}
-                        className="flex-1 text-[11px] border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500"
-                        placeholder={`Point ${idx + 1}`}
-                      />
-                      <button onClick={() => removeNote(idx)} className="text-gray-300 hover:text-red-400">×</button>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-2 flex items-center space-x-2">
-                  <span className="text-[10px] text-gray-400">Size</span>
-                  <input 
-                    type="range" min="10" max="40" 
-                    value={notesSize} 
-                    onChange={(e) => setNotesSize(Number(e.target.value))}
-                    className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                  />
-                  <span className="text-[10px] text-gray-400">{notesSize}px</span>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
+          {/* Map Layout */}
           <div className="space-y-4 pb-6 border-b border-gray-200">
             <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Map Layout</h2>
             <div>
@@ -214,6 +196,21 @@ function App() {
                 <span className="text-[10px] text-gray-400">{(mapZoom * 100).toFixed(0)}%</span>
               </div>
             </div>
+
+            {(mapType === '1a' || mapType === '1b') && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Base Color (Range)</label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="color"
+                    value={baseNumericColor}
+                    onChange={(e) => setBaseNumericColor(e.target.value)}
+                    className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                  />
+                  <span className="text-xs text-gray-400">{baseNumericColor}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <MapTypeSelector 
@@ -221,20 +218,21 @@ function App() {
             onChange={handleMapTypeChange} 
           />
 
+          {/* Export */}
           <div className="space-y-4 pt-4">
             <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Export Map</h2>
             <div className="grid grid-cols-2 gap-3 pb-8">
               <button
-                onClick={() => exportMap('india-map-container', title.replace(/\s+/g, '-').toLowerCase() || 'india-map', 'png')}
-                className="flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 px-4 rounded-lg transition-all shadow-sm"
+                onClick={() => exportMap('india-map-container', 'india-map', 'png')}
+                className="flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 px-4 rounded-lg transition-all shadow-sm"
               >
-                <span>PNG (1080px)</span>
+                PNG (1080px)
               </button>
               <button
-                onClick={() => exportMap('india-map-container', title.replace(/\s+/g, '-').toLowerCase() || 'india-map', 'svg')}
-                className="flex items-center justify-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold py-3 px-4 rounded-lg border border-gray-200 transition-all shadow-sm"
+                onClick={() => exportMap('india-map-container', 'india-map', 'svg')}
+                className="flex items-center justify-center bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold py-3 px-4 rounded-lg border border-gray-200 transition-all shadow-sm"
               >
-                <span>SVG Vector</span>
+                SVG Vector
               </button>
             </div>
           </div>
@@ -249,7 +247,6 @@ function App() {
         </div>
       </aside>
 
-      {/* Map Content Area */}
       <main className="flex-1 relative bg-gray-100/50 flex flex-col p-8 items-center justify-center">
         <div className="w-full max-w-4xl aspect-[4/5] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <MapCanvas 
@@ -257,15 +254,10 @@ function App() {
             stateValues={stateValues} 
             mapType={mapType}
             categories={type3Categories}
-            title={title}
-            titleSize={titleSize}
-            subtitle={subtitle}
-            legendTitle={legendTitle}
             baseNumericColor={baseNumericColor}
-            source={source}
-            notes={notes}
-            notesSize={notesSize}
             mapZoom={mapZoom}
+            textBlocks={textBlocks}
+            onTextBlockPositionChange={updateTextBlockPosition}
           />
         </div>
       </main>

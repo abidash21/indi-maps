@@ -1,8 +1,9 @@
-import { useMemo, useState, useCallback, useRef } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import indiaTopoRaw from '../data/india-states.json';
 import { STATES } from '../data/states';
+import logoSrc from '../assets/statvyam.png';
 
 const SHORT_NAMES = {
   "Dadra and Nagar Haveli and Daman and Diu": "Dadra and Nagar Haveli\n& Daman and Diu",
@@ -33,54 +34,36 @@ const LABEL_OFFSETS = {
   "Meghalaya": [0, 10]
 };
 
-function wrapText(text, maxChars = 30) {
-  if (!text) return [];
-  const words = text.split(/\s+/);
-  const lines = [];
-  let currentLine = '';
-  words.forEach(word => {
-    if ((currentLine + word).length <= maxChars) {
-      currentLine += (currentLine ? ' ' : '') + word;
-    } else {
-      if (currentLine) lines.push(currentLine);
-      currentLine = word;
-    }
-  });
-  if (currentLine) lines.push(currentLine);
-  return lines;
-}
-
-const DEFAULT_POSITIONS = {
-  title:    { x: 540, y: 70 },
-  legend:   { x: 630, y: 160 },
-  source:   { x: 40,  y: 1055 },
-  notes:    { x: 740, y: 650 },
-  map:      { x: 0,   y: 0 },
-  category: { x: 60,  y: 850 },
-};
-
 export default function MapCanvas({ 
   stateColors = {}, 
   stateValues = {}, 
   mapType, 
   categories = [], 
-  title = "Map Title", 
-  titleSize = 48,
-  subtitle = "",
-  legendTitle = "",
   baseNumericColor = "#1a6b2a",
-  source = "",
-  notes = [],
-  notesSize = 18,
-  mapZoom = 1.0
+  mapZoom = 1.0,
+  textBlocks = [],
+  onTextBlockPositionChange,
 }) {
   const svgRef = useRef(null);
 
-  const [positions, setPositions] = useState(DEFAULT_POSITIONS);
-  // Per-state label drag offsets: { "Maharashtra": {x: 5, y: -10}, … }
+  // Map + individual label drag state
+  const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
   const [labelDragOffsets, setLabelDragOffsets] = useState({});
-  // dragging can be a component key OR { type: 'label', stateName: '...' }
+  const [numericLegendOffset, setNumericLegendOffset] = useState({ x: 0, y: 0 });
+  const [categoryLegendOffset, setCategoryLegendOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(null);
+  const [logoBase64, setLogoBase64] = useState(null);
+
+  // Convert logo to base64 on mount for SVG export compatibility
+  useEffect(() => {
+    fetch(logoSrc)
+      .then(res => res.blob())
+      .then(blob => {
+        const reader = new FileReader();
+        reader.onloadend = () => setLogoBase64(reader.result);
+        reader.readAsDataURL(blob);
+      });
+  }, []);
 
   const features = useMemo(() => {
     return topojson.feature(indiaTopoRaw, indiaTopoRaw.objects.states).features;
@@ -111,8 +94,7 @@ export default function MapCanvas({
     return m === 0 ? 100 : m;
   }, [stateValues, mapType]);
 
-  const titleLines = useMemo(() => wrapText(title, 35), [title]);
-
+  // SVG coordinate conversion
   const toSvgCoords = useCallback((clientX, clientY) => {
     const svg = svgRef.current;
     if (!svg) return { x: 0, y: 0 };
@@ -123,65 +105,34 @@ export default function MapCanvas({
     return { x: svgP.x, y: svgP.y };
   }, []);
 
-  const handleComponentMouseDown = useCallback((key, e) => {
+  // Drag handlers
+  const startDrag = useCallback((kind, id, origPos, e) => {
     e.stopPropagation();
     const { x, y } = toSvgCoords(e.clientX, e.clientY);
-    setDragging({
-      type: 'component',
-      key,
-      startX: x,
-      startY: y,
-      origX: positions[key].x,
-      origY: positions[key].y,
-    });
-  }, [positions, toSvgCoords]);
-
-  const handleLabelMouseDown = useCallback((stateName, e) => {
-    e.stopPropagation();
-    const { x, y } = toSvgCoords(e.clientX, e.clientY);
-    const cur = labelDragOffsets[stateName] || { x: 0, y: 0 };
-    setDragging({
-      type: 'label',
-      stateName,
-      startX: x,
-      startY: y,
-      origX: cur.x,
-      origY: cur.y,
-    });
-  }, [labelDragOffsets, toSvgCoords]);
+    setDragging({ kind, id, startX: x, startY: y, origX: origPos.x, origY: origPos.y });
+  }, [toSvgCoords]);
 
   const handleMouseMove = useCallback((e) => {
     if (!dragging) return;
     const { x, y } = toSvgCoords(e.clientX, e.clientY);
     const dx = x - dragging.startX;
     const dy = y - dragging.startY;
+    const newPos = { x: dragging.origX + dx, y: dragging.origY + dy };
 
-    if (dragging.type === 'component') {
-      setPositions(prev => ({
-        ...prev,
-        [dragging.key]: {
-          x: dragging.origX + dx,
-          y: dragging.origY + dy,
-        }
-      }));
-    } else if (dragging.type === 'label') {
-      setLabelDragOffsets(prev => ({
-        ...prev,
-        [dragging.stateName]: {
-          x: dragging.origX + dx,
-          y: dragging.origY + dy,
-        }
-      }));
+    if (dragging.kind === 'map') {
+      setMapOffset(newPos);
+    } else if (dragging.kind === 'label') {
+      setLabelDragOffsets(prev => ({ ...prev, [dragging.id]: newPos }));
+    } else if (dragging.kind === 'textblock') {
+      onTextBlockPositionChange?.(dragging.id, newPos);
+    } else if (dragging.kind === 'numeric-legend') {
+      setNumericLegendOffset(newPos);
+    } else if (dragging.kind === 'category-legend') {
+      setCategoryLegendOffset(newPos);
     }
-  }, [dragging, toSvgCoords]);
+  }, [dragging, toSvgCoords, onTextBlockPositionChange]);
 
-  const handleMouseUp = useCallback(() => {
-    setDragging(null);
-  }, []);
-
-  const DragHandle = ({ x, y }) => (
-    <circle cx={x} cy={y} r="8" fill="rgba(99,102,241,0.3)" stroke="rgba(99,102,241,0.7)" strokeWidth="1.5" className="drag-handle" />
-  );
+  const handleMouseUp = useCallback(() => setDragging(null), []);
 
   return (
     <div id="india-map-container" className="w-full h-full flex justify-center items-center overflow-hidden bg-white relative">
@@ -204,18 +155,16 @@ export default function MapCanvas({
           <style>{`
             .draggable { cursor: grab; }
             .draggable:active { cursor: grabbing; }
-            .drag-handle { opacity: 0; transition: opacity 0.2s; pointer-events: none; }
-            .draggable:hover .drag-handle { opacity: 1; }
           `}</style>
         </defs>
 
         <rect width={width} height={height} fill="white" />
 
-        {/* ===== DRAGGABLE: Map (paths + labels move together) ===== */}
+        {/* ===== MAP (paths + labels, all draggable together) ===== */}
         <g 
           className="draggable"
-          transform={`translate(${positions.map.x}, ${positions.map.y})`}
-          onMouseDown={(e) => handleComponentMouseDown('map', e)}
+          transform={`translate(${mapOffset.x}, ${mapOffset.y})`}
+          onMouseDown={(e) => startDrag('map', null, mapOffset, e)}
         >
           {/* State paths */}
           {features.map((feature) => {
@@ -236,7 +185,7 @@ export default function MapCanvas({
             );
           })}
 
-          {/* State labels — each individually draggable within the map group */}
+          {/* State labels — each individually draggable */}
           {features.map((feature) => {
             const stateInfo = STATES.find((s) => s.id === feature.id);
             if (!stateInfo) return null;
@@ -262,8 +211,7 @@ export default function MapCanvas({
               <g
                 key={`label-${feature.id}`}
                 className="draggable"
-                onMouseDown={(e) => handleLabelMouseDown(fullName, e)}
-                style={{ cursor: 'grab' }}
+                onMouseDown={(e) => startDrag('label', fullName, userDrag, e)}
               >
                 <text
                   x={x} y={y}
@@ -288,51 +236,13 @@ export default function MapCanvas({
           })}
         </g>
 
-        {/* ===== DRAGGABLE: Title + Subtitle ===== */}
-        <g 
-          className="draggable"
-          transform={`translate(${positions.title.x}, ${positions.title.y})`}
-          onMouseDown={(e) => handleComponentMouseDown('title', e)}
-          textAnchor="middle"
-        >
-          <DragHandle x={0} y={-10} />
-          {titleLines.map((line, i) => (
-            <text key={i} y={i * (titleSize * 1.05)} fontSize={titleSize} fontWeight="bold" fill="#111827" className="font-sans">
-              {line}
-            </text>
-          ))}
-          {subtitle && (
-            <text y={titleLines.length * (titleSize * 1.05) + 5} fontSize="20" fill="#4b5563" className="font-sans italic">
-              {subtitle}
-            </text>
-          )}
-        </g>
-
-        {/* ===== DRAGGABLE: Source ===== */}
-        <g
-          className="draggable"
-          transform={`translate(${positions.source.x}, ${positions.source.y})`}
-          onMouseDown={(e) => handleComponentMouseDown('source', e)}
-        >
-          <DragHandle x={0} y={-5} />
-          <text fontSize="16" fill="#6b7280" className="font-sans font-medium">
-            {source}
-          </text>
-        </g>
-
-        {/* ===== DRAGGABLE: Numeric Legend ===== */}
+        {/* ===== Numeric Legend (non-text, stays as built-in, now draggable) ===== */}
         {(mapType === '1a' || mapType === '1b') && (
           <g 
             className="draggable"
-            transform={`translate(${positions.legend.x}, ${positions.legend.y})`}
-            onMouseDown={(e) => handleComponentMouseDown('legend', e)}
+            transform={`translate(${(width - 450) + numericLegendOffset.x}, ${160 + numericLegendOffset.y})`}
+            onMouseDown={(e) => startDrag('numeric-legend', null, numericLegendOffset, e)}
           >
-            <DragHandle x={0} y={-15} />
-            {legendTitle && (
-              <text x={175} y="-15" textAnchor="middle" fontSize="16" fontWeight="bold" fill="#374151" className="font-sans">
-                {legendTitle}
-              </text>
-            )}
             <rect width="350" height="15" fill="url(#dynamic-gradient)" rx="4" stroke="#e5e7eb" />
             <text y="35" fontSize="14" fill="#374151" className="font-sans">0</text>
             <text x="350" y="35" textAnchor="end" fontSize="14" fill="#374151" className="font-sans">
@@ -341,14 +251,13 @@ export default function MapCanvas({
           </g>
         )}
 
-        {/* ===== DRAGGABLE: Category Legend ===== */}
+        {/* ===== Category Legend (now draggable) ===== */}
         {mapType === '3' && categories && categories.length > 0 && (
           <g 
             className="draggable"
-            transform={`translate(${positions.category.x}, ${positions.category.y})`}
-            onMouseDown={(e) => handleComponentMouseDown('category', e)}
+            transform={`translate(${60 + categoryLegendOffset.x}, ${850 + categoryLegendOffset.y})`}
+            onMouseDown={(e) => startDrag('category-legend', null, categoryLegendOffset, e)}
           >
-            <DragHandle x={0} y={-5} />
             {categories.map((cat, idx) => (
               <g key={cat.id} transform={`translate(0, ${idx * 30})`}>
                 <rect x="0" y="0" width="18" height="18" rx="4" fill={cat.color || "#cccccc"} />
@@ -360,30 +269,50 @@ export default function MapCanvas({
           </g>
         )}
 
-        {/* ===== DRAGGABLE: Notes ===== */}
-        {notes && notes.length > 0 && (
-          <g 
-            className="draggable"
-            transform={`translate(${positions.notes.x}, ${positions.notes.y})`}
-            onMouseDown={(e) => handleComponentMouseDown('notes', e)}
-          >
-            <DragHandle x={0} y={-5} />
-            <text fontSize={notesSize + 2} fontWeight="bold" fill="#111827" className="font-sans">Notes:</text>
-            {notes.map((note, idx) => {
-              const wrappedNote = wrapText(note, 25);
-              return (
-                <g key={idx} transform={`translate(0, ${30 + idx * 50})`}>
-                  <text fontSize={notesSize} fill="#374151" className="font-sans">
-                    <tspan x="0" fontWeight="bold">•</tspan>
-                    {wrappedNote.map((line, li) => (
-                      <tspan key={li} x="15" dy={li === 0 ? "0" : "1.2em"}>{line}</tspan>
-                    ))}
-                  </text>
-                </g>
-              );
-            })}
-          </g>
-        )}
+        {/* ===== Generic Draggable Text Blocks ===== */}
+        {textBlocks.map((block) => {
+          const lines = block.text.split('\n');
+          return (
+            <g
+              key={block.id}
+              className="draggable"
+              transform={`translate(${block.position.x}, ${block.position.y})`}
+              onMouseDown={(e) => startDrag('textblock', block.id, block.position, e)}
+            >
+              {lines.map((line, i) => (
+                <text
+                  key={i}
+                  y={i * (block.fontSize * 1.3)}
+                  fontSize={block.fontSize}
+                  fontWeight={block.fontWeight}
+                  fontStyle={block.fontStyle}
+                  textDecoration={block.textDecoration}
+                  fill={block.color}
+                  className="select-none font-sans"
+                >
+                  {line}
+                </text>
+              ))}
+            </g>
+          );
+        })}
+
+        {/* ===== Branding: bottom-right corner ===== */}
+        <g transform={`translate(${width - 120}, ${height - 65})`} textAnchor="middle">
+          <text x="0" y="0" fontSize="10" fill="#9ca3af" className="font-sans" letterSpacing="1">
+            created by
+          </text>
+          {logoBase64 && (
+            <image
+              href={logoBase64}
+              x="-80"
+              y="-10"
+              width="160"
+              height="60"
+              preserveAspectRatio="xMidYMid meet"
+            />
+          )}
+        </g>
       </svg>
     </div>
   );
