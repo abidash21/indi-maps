@@ -29,11 +29,45 @@ const LABEL_OFFSETS = {
   "Himachal Pradesh": [0, -15],
   "Karnataka": [-30, 10],
   "Jharkhand": [-15, 15],
+  "Uttarakhand": [10, 0],
   "Andhra Pradesh": [-40, 40],
   "Meghalaya": [0, 10]
 };
 
-export default function MapCanvas({ stateColors = {}, stateValues = {}, mapType, categories = [] }) {
+// Helper to wrap text into lines based on character length
+function wrapText(text, maxChars = 30) {
+  if (!text) return [];
+  const words = text.split(/\s+/);
+  const lines = [];
+  let currentLine = '';
+
+  words.forEach(word => {
+    if ((currentLine + word).length <= maxChars) {
+      currentLine += (currentLine ? ' ' : '') + word;
+    } else {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    }
+  });
+  if (currentLine) lines.push(currentLine);
+  return lines;
+}
+
+export default function MapCanvas({ 
+  stateColors = {}, 
+  stateValues = {}, 
+  mapType, 
+  categories = [], 
+  title = "Map Title", 
+  titleSize = 48,
+  subtitle = "",
+  legendTitle = "",
+  baseNumericColor = "#1a6b2a",
+  source = "",
+  notes = [],
+  notesSize = 18,
+  mapZoom = 1.0
+}) {
   // Convert TopoJSON to GeoJSON features only once
   const features = useMemo(() => {
     return topojson.feature(indiaTopoRaw, indiaTopoRaw.objects.states).features;
@@ -43,18 +77,52 @@ export default function MapCanvas({ stateColors = {}, stateValues = {}, mapType,
   const height = 1080;
 
   const pathGenerator = useMemo(() => {
-    const projection = d3.geoMercator().fitSize([width, height], { type: "FeatureCollection", features });
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const baseWidth = 900;
+    const baseHeight = 840;
+    
+    const scaledWidth = baseWidth * mapZoom;
+    const scaledHeight = baseHeight * mapZoom;
+    
+    // Position slightly lower to clear title area
+    const x0 = centerX - scaledWidth / 2;
+    const x1 = centerX + scaledWidth / 2;
+    const y0 = centerY - (scaledHeight / 2) + 60;
+    const y1 = centerY + (scaledHeight / 2) + 60;
+
+    const projection = d3.geoMercator().fitExtent([[x0, y0], [x1, y1]], { type: "FeatureCollection", features });
     return d3.geoPath().projection(projection);
-  }, [features]);
+  }, [features, mapZoom]);
+
+  // Compute max for legend 1b
+  const maxValue = useMemo(() => {
+    if (mapType !== '1b') return 100;
+    const values = Object.values(stateValues).map(v => Number(v)).filter(v => !isNaN(v));
+    const m = values.length > 0 ? Math.max(...values, 0) : 100;
+    return m === 0 ? 100 : m;
+  }, [stateValues, mapType]);
+
+  const titleLines = useMemo(() => wrapText(title, 35), [title]);
 
   return (
-    <div className="w-full h-full flex justify-center items-center overflow-hidden bg-white relative">
+    <div id="india-map-container" className="w-full h-full flex justify-center items-center overflow-hidden bg-white relative">
       <svg
         width="100%"
         height="100%"
         viewBox={`0 0 ${width} ${height}`}
         className="max-h-full max-w-full"
+        xmlns="http://www.w3.org/2000/svg"
       >
+        <defs>
+          <linearGradient id="dynamic-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="100%" stopColor={baseNumericColor} />
+          </linearGradient>
+        </defs>
+
+        <rect width={width} height={height} fill="white" />
+
         <g className="india-map">
           {features.map((feature) => {
             const stateInfo = STATES.find((s) => s.id === feature.id);
@@ -92,18 +160,19 @@ export default function MapCanvas({ stateColors = {}, stateValues = {}, mapType,
               centroid = pathGenerator.centroid(feature);
               if (isNaN(centroid[0]) || isNaN(centroid[1])) return null;
             } catch (e) {
-              return null; // Some features might not render a valid centroid
+              return null;
             }
 
             const offset = LABEL_OFFSETS[displayName] || [0, 0];
-            const x = centroid[0] + offset[0];
-            const y = centroid[1] + offset[1];
+            const x = centroid[0] + offset[0] * mapZoom;
+            const y = centroid[1] + offset[1] * mapZoom;
 
             const showValue = mapType !== '3';
 
-            // Determine text color based on background (heuristic for default color)
-            // If it's light gray #e8e8e8, we should probably use black text. But per image, mostly white or black depending on the fill.
-            // Let's just stick to white for now as it's the expected aesthetic for dark blue standard maps. We'll add text stroke/shadow.
+            const fontSizeBase = 14 * mapZoom;
+            const fontSizeValue = 18 * mapZoom;
+            const fontSizeSmall = 8 * mapZoom;
+
             return (
               <text
                 key={`label-${feature.id}`}
@@ -111,7 +180,7 @@ export default function MapCanvas({ stateColors = {}, stateValues = {}, mapType,
                 y={y}
                 textAnchor="middle"
                 className="select-none font-sans"
-                style={{ fill: '#ffffff', paintOrder: 'stroke', stroke: '#000000', strokeWidth: 2, filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.5))' }}
+                style={{ fill: '#ffffff', paintOrder: 'stroke', stroke: '#000000', strokeWidth: 2 * mapZoom, filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.5))' }}
               >
                 {displayName.split('\n').map((line, i) => {
                   const isSmall = displayName.includes("Dadra and Nagar Haveli");
@@ -120,14 +189,14 @@ export default function MapCanvas({ stateColors = {}, stateValues = {}, mapType,
                       key={i} 
                       x={x} 
                       dy={i === 0 ? "-0.2em" : "1.1em"} 
-                      className={isSmall ? "text-[8px] md:text-[10px]" : "text-[12px] md:text-[14px]"}
+                      fontSize={isSmall ? fontSizeSmall : fontSizeBase}
                     >
                       {line}
                     </tspan>
                   );
                 })}
                 {showValue && (
-                  <tspan x={x} dy="1.1em" className="text-[16px] md:text-[18px] font-semibold">
+                  <tspan x={x} dy="1.1em" fontSize={fontSizeValue} fontWeight="bold">
                     {value}
                   </tspan>
                 )}
@@ -136,19 +205,76 @@ export default function MapCanvas({ stateColors = {}, stateValues = {}, mapType,
           })}
         </g>
 
+        {/* Title and Subtitle - Wrapped Title */}
+        <g transform={`translate(${width / 2}, 70)`} textAnchor="middle">
+          {titleLines.map((line, i) => (
+            <text key={i} y={i * (titleSize * 1.05)} fontSize={titleSize} fontWeight="bold" fill="#111827" className="font-sans">
+              {line}
+            </text>
+          ))}
+          {subtitle && (
+            <text y={titleLines.length * (titleSize * 1.05) + 5} fontSize="20" fill="#4b5563" className="font-sans italic">
+              {subtitle}
+            </text>
+          )}
+        </g>
+
+        {/* Dedicated Source */}
+        <text x={40} y={height - 25} fontSize="16" fill="#6b7280" className="font-sans font-medium">
+          {source}
+        </text>
+
+        {/* Numeric Legend - With Legend Title above */}
+        {(mapType === '1a' || mapType === '1b') && (
+          <g transform={`translate(${width - 450}, 160)`}>
+             {legendTitle && (
+               <text x={175} y="-15" textAnchor="middle" fontSize="16" fontWeight="bold" fill="#374151" className="font-sans">
+                 {legendTitle}
+               </text>
+             )}
+            <rect width="350" height="15" fill="url(#dynamic-gradient)" rx="4" stroke="#e5e7eb" />
+            <text y="35" fontSize="14" fill="#374151" className="font-sans">0</text>
+            <text x="350" y="35" textAnchor="end" fontSize="14" fill="#374151" className="font-sans">
+              {mapType === '1a' ? '100%' : maxValue}
+            </text>
+          </g>
+        )}
+
         {/* Category Legend */}
         {mapType === '3' && categories && categories.length > 0 && (
-          <g className="map-legend" transform="translate(60, 60)">
-            <rect x="0" y="0" width="220" height={categories.length * 30 + 30} fill="white" stroke="#e5e7eb" rx="8" opacity="0.95" filter="drop-shadow(0px 4px 6px rgba(0,0,0,0.1))" />
-            <text x="20" y="25" fontSize="14" fill="#111827" className="font-sans font-bold uppercase tracking-wider">Legend</text>
+          <g className="map-legend" transform="translate(60, 850)">
             {categories.map((cat, idx) => (
-              <g key={cat.id} transform={`translate(20, ${40 + idx * 30})`}>
-                <rect x="0" y="0" width="16" height="16" rx="4" fill={cat.color || "#cccccc"} stroke="#d1d5db" strokeWidth="1" />
-                <text x="28" y="13" fontSize="14" fill="#374151" className="font-sans font-medium">
+              <g key={cat.id} transform={`translate(0, ${idx * 30})`}>
+                <rect x="0" y="0" width="18" height="18" rx="4" fill={cat.color || "#cccccc"} />
+                <text x="30" y="14" fontSize="16" fill="#1f2937" className="font-sans font-semibold">
                   {cat.name || `Category ${idx+1}`}
                 </text>
               </g>
             ))}
+          </g>
+        )}
+
+        {/* Notes Section - level of Odisha, Point Wrapping */}
+        {notes && notes.length > 0 && (
+          <g className="map-notes" transform="translate(740, 650)">
+            <text fontSize={notesSize + 2} fontWeight="bold" fill="#111827" className="font-sans mb-2">Notes:</text>
+            {notes.map((note, idx) => {
+              const wrappedNote = wrapText(note, 25);
+              let cumulativeY = 0;
+              // We need to calculate cumulative Y based on current index and previous wrapped lines
+              // For simplicity, let's just render the wrapped lines for each point
+              // Actually, I'll calculate total offset based on overall index
+              return (
+                <g key={idx} transform={`translate(0, ${30 + idx * 50})`}>
+                  <text fontSize={notesSize} fill="#374151" className="font-sans">
+                    <tspan x="0" fontWeight="bold">•</tspan>
+                    {wrappedNote.map((line, li) => (
+                      <tspan key={li} x="15" dy={li === 0 ? "0" : "1.2em"}>{line}</tspan>
+                    ))}
+                  </text>
+                </g>
+              );
+            })}
           </g>
         )}
       </svg>

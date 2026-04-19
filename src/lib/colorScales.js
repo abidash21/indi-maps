@@ -1,17 +1,15 @@
 import * as d3 from 'd3';
 
-// Reusable color scale for numeric range
-// Uses d3.interpolateRgb, clamping between 0 and 100 for safety
-const baseScale = d3.scaleSequential(d3.interpolateRgb("#ffffff", "#1a6b2a")).domain([0, 100]);
-
 /**
  * Type 1a: Percentage
  * @param {number} value - A percentage (0-100)
+ * @param {string} baseColor - The target high-intensity color
  * @returns {string} - HEX/RGB color
  */
-export function percentageColor(value) {
+export function percentageColor(value, baseColor = "#1a6b2a") {
   if (value === null || value === undefined || isNaN(value)) return "#e8e8e8";
-  return baseScale(Math.max(0, Math.min(100, Number(value))));
+  const scale = d3.scaleSequential(d3.interpolateRgb("#ffffff", baseColor)).domain([0, 100]);
+  return scale(Math.max(0, Math.min(100, Number(value))));
 }
 
 /**
@@ -19,9 +17,10 @@ export function percentageColor(value) {
  * Normalizes by the max value, then uses percentageColor
  * @param {number} value - The state's value
  * @param {number[]} allValues - Array of all state values to compute max
+ * @param {string} baseColor - The target high-intensity color
  * @returns {string} - HEX/RGB color
  */
-export function absoluteColor(value, allValues) {
+export function absoluteColor(value, allValues, baseColor = "#1a6b2a") {
   if (value === null || value === undefined || isNaN(value)) return "#e8e8e8";
   
   // Filter valid numbers
@@ -32,20 +31,14 @@ export function absoluteColor(value, allValues) {
   const max = Math.max(...validValues);
   
   // If max is 0 or less, avoid division by zero (fallback to 0 percentage)
-  if (max <= 0) return percentageColor(0);
+  if (max <= 0) return percentageColor(0, baseColor);
   
   const normalized = (Number(value) / max) * 100;
-  return percentageColor(normalized);
+  return percentageColor(normalized, baseColor);
 }
 
 /**
  * Type 2: Binary
- * @param {string} value - The user's selection ("A", "B", or "Other")
- * @param {string} catA - Label for category A
- * @param {string} colorA - Color for category A
- * @param {string} catB - Label for category B
- * @param {string} colorB - Color for category B
- * @returns {string} - Selected color or light gray for "Other"
  */
 export function binaryColor(value, catA, colorA, catB, colorB) {
   if (value === catA && catA) return colorA;
@@ -55,9 +48,6 @@ export function binaryColor(value, catA, colorA, catB, colorB) {
 
 /**
  * Type 3: Multi-Category
- * @param {string} value - The user's selection
- * @param {Array<{name: string, color: string}>} categories - Up to 6 categories
- * @returns {string} - Matched color or light gray
  */
 export function multiColor(value, categories = []) {
   if (!value) return "#f0f0f0";
